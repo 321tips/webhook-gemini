@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>下载文件管理</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f5f6f8;
+      color: #1f2430;
+      font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .app { max-width: 880px; margin: 0 auto; padding: 32px 20px 64px; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    h1 { font-size: 22px; margin: 0; }
+    button {
+      font: inherit;
+      cursor: pointer;
+      border: 1px solid #d0d5dd;
+      background: #fff;
+      color: #1f2430;
+      border-radius: 8px;
+      padding: 8px 14px;
+    }
+    button:hover:not(:disabled) { background: #f0f2f5; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .status { min-height: 22px; margin-bottom: 12px; color: #667085; font-size: 14px; }
+    .status.error { color: #d92d20; }
+    .list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+    .item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: #fff;
+      border: 1px solid #e4e7ec;
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .info { flex: 1; min-width: 0; }
+    .name { font-weight: 600; overflow-wrap: anywhere; }
+    .meta { font-size: 13px; color: #667085; margin-top: 4px; }
+    .path { font-size: 12px; color: #98a2b3; margin-top: 4px; overflow-wrap: anywhere; }
+    .move { white-space: nowrap; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 24, 40, .5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal[hidden] { display: none; }
+    .dialog {
+      width: 100%;
+      max-width: 440px;
+      background: #fff;
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, .2);
+    }
+    .dialog h2 { margin: 0 0 8px; font-size: 18px; }
+    .dialog p { margin: 0 0 16px; color: #667085; overflow-wrap: anywhere; }
+    .choice {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid #e4e7ec;
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+    .choice span { font-size: 12px; color: #667085; overflow-wrap: anywhere; }
+    .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .primary:hover:not(:disabled) { background: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>下载文件</h1>
+      <button id="refresh" type="button">刷新</button>
+    </header>
+    <div id="status" class="status" role="status"></div>
+    <ul id="list" class="list"></ul>
+  </main>
+
+  <div id="modal" class="modal" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title">移动文件</h2>
+      <p id="modal-file"></p>
+      <label class="choice">
+        <input type="radio" name="target" value="A" checked>
+        <span>路径 A：<b data-target-path="A"></b></span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="target" value="B">
+        <span>路径 B：<b data-target-path="B"></b></span>
+      </label>
+      <div class="actions">
+        <button id="cancel" type="button">取消</button>
+        <button id="confirm" class="primary" type="button">确认移动</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_LIST = '/api/Downloads/';
+    const API_MOVE = '/api/move';
+    const TARGETS = { A: '/data/path-a', B: '/data/path-b' };
+
+    const listEl = document.getElementById('list');
+    const statusEl = document.getElementById('status');
+    const modal = document.getElementById('modal');
+    const modalFile = document.getElementById('modal-file');
+    const confirmBtn = document.getElementById('confirm');
+    let currentFile = null;
+
+    document.querySelectorAll('[data-target-path]').forEach(function (el) {
+      el.textContent = TARGETS[el.dataset.targetPath];
+    });
+
+    function setStatus(text, isError) {
+      statusEl.textContent = text;
+      statusEl.className = 'status' + (isError ? ' error' : '');
+    }
+
+    function formatSize(bytes) {
+      const n = Number(bytes) || 0;
+      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+      let i = 0;
+      let value = n;
+      while (value >= 1024 && i < units.length - 1) {
+        value /= 1024;
+        i++;
+      }
+      return (i === 0 ? value : value.toFixed(1)) + ' ' + units[i];
+    }
+
+    function render(files) {
+      listEl.replaceChildren();
+      files.forEach(function (file) {
+        const name = file.filename || file.name || '(未命名)';
+        const path = file.path || '';
+        const created = file.createdAt || file.created || '';
+
+        const li = document.createElement('li');
+        li.className = 'item';
+
+        const info = document.createElement('div');
+        info.className = 'info';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = name;
+
+        const metaEl = document.createElement('div');
+        metaEl.className = 'meta';
+        metaEl.textContent = formatSize(file.size) + (created ? ' · ' + created : '');
+
+        const pathEl = document.createElement('div');
+        pathEl.className = 'path';
+        pathEl.textContent = path;
+
+        info.append(nameEl, metaEl, pathEl);
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'move';
+        btn.textContent = '移动';
+        btn.addEventListener('click', function () {
+          openModal(file, name);
+        });
+
+        li.append(info, btn);
+        listEl.append(li);
+      });
+    }
+
+    async function loadFiles() {
+      setStatus('加载中…', false);
+      try {
+        const res = await fetch(API_LIST, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const files = Array.isArray(data) ? data : (Array.isArray(data.files) ? data.files : []);
+        render(files);
+        setStatus(files.length ? '' : '暂无文件', false);
+      } catch (err) {
+        setStatus('加载失败：' + err.message, true);
+      }
+    }
+
+    function openModal(file, name) {
+      currentFile = file;
+      modalFile.textContent = name + '  (' + (file.path || '') + ')';
+      modal.hidden = false;
+      confirmBtn.focus();
+    }
+
+    function closeModal() {
+      modal.hidden = true;
+      currentFile = null;
+    }
+
+    document.getElementById('refresh').addEventListener('click', loadFiles);
+    document.getElementById('cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', function (event) {
+      if (event.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && !modal.hidden) closeModal();
+    });
+
+    confirmBtn.addEventListener('click', async function () {
+      if (!currentFile) return;
+      const choice = modal.querySelector('input[name="target"]:checked').value;
+      const payload = { source: currentFile.path, target: TARGETS[choice] };
+      confirmBtn.disabled = true;
+      try {
+        const res = await fetch(API_MOVE, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error('HTTP ' + res.status + (text ? ' · ' + text.slice(0, 200) : ''));
+        }
+        closeModal();
+        await loadFiles();
+      } catch (err) {
+        alert('移动失败：' + err.message);
+      } finally {
+        confirmBtn.disabled = false;
+      }
+    });
+
+    loadFiles();
+  </script>
+</body>
+</html>

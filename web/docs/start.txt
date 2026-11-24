@@ -1,0 +1,47 @@
+本项目为Web应用，前端页面不引js 三方库，js 代码逻辑直接写在html script标签下，样式在style标签下。
+前端需要：
+1 .页面初始，请求get /api/Downlods/ , 获取服务返回的文件列表，信息包含大小，文件名，创建时间，文件路径。
+    1.1 根据文件列表信息渲染页面。
+    1.2 单项文件 信息添加按钮，点击出弹窗 选取 路径A 或B ，确认，请求post /api/move {source:path,target:paht}
+
+后端需要：
+1. 直接用二进制文件webhook做服务，配置文件hooks.json处理请求。
+    1.1 配置文件hooks.json demo
+    ```json
+    [
+        {
+            "id": "index",
+            "execute-command": "/bin/cat",
+            "pass-arguments-to-command": [
+            {
+                "source": "string",
+                "name": "/xx/xxx/index.html"
+            }
+            ],
+            "include-command-output-in-response": true,
+            "response-headers": [
+            {
+                "name": "Content-Type",
+                "value": "text/html; charset=utf-8"
+            }
+            ],
+            "http-methods": ["GET"]
+        }
+        {
+            "id": "downloads",
+            "execute-command": "camand_ls_to_response_json_info",
+           
+            "include-command-output-in-response": true,
+            "response-headers": [
+            {
+                "name": "Content-Type",
+                "value": "text/json; charset=utf-8"
+            }
+            ],
+            "http-methods": ["GET"]
+        }
+    ]
+
+
+    ```
+任务列表：1. 生成前端html文件。 2. 生成hooks.json文件

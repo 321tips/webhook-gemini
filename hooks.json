@@ -1,0 +1,98 @@
+[
+  {
+    "id": "index",
+    "execute-command": "/bin/cat",
+    "command-working-directory": ".",
+    "pass-arguments-to-command": [
+      {
+        "source": "string",
+        "name": "web/index.html"
+      }
+    ],
+    "include-command-output-in-response": true,
+    "response-headers": [
+      {
+        "name": "Content-Type",
+        "value": "text/html; charset=utf-8"
+      }
+    ],
+    "http-methods": ["GET"]
+  },
+  {
+    "id": "api/Downloads/",
+    "execute-command": "/bin/sh",
+    "command-working-directory": ".",
+    "pass-arguments-to-command": [
+      {
+        "source": "string",
+        "name": "webhook-api.sh"
+      },
+      {
+        "source": "string",
+        "name": "list"
+      }
+    ],
+    "include-command-output-in-response": true,
+    "response-headers": [
+      {
+        "name": "Content-Type",
+        "value": "application/json; charset=utf-8"
+      }
+    ],
+    "http-methods": ["GET"]
+  },
+  {
+    "id": "api/Downlods/",
+    "execute-command": "/bin/sh",
+    "command-working-directory": ".",
+    "pass-arguments-to-command": [
+      {
+        "source": "string",
+        "name": "webhook-api.sh"
+      },
+      {
+        "source": "string",
+        "name": "list"
+      }
+    ],
+    "include-command-output-in-response": true,
+    "response-headers": [
+      {
+        "name": "Content-Type",
+        "value": "application/json; charset=utf-8"
+      }
+    ],
+    "http-methods": ["GET"]
+  },
+  {
+    "id": "api/move",
+    "execute-command": "/bin/sh",
+    "command-working-directory": ".",
+    "pass-arguments-to-command": [
+      {
+        "source": "string",
+        "name": "webhook-api.sh"
+      },
+      {
+        "source": "string",
+        "name": "move"
+      },
+      {
+        "source": "payload",
+        "name": "source"
+      },
+      {
+        "source": "payload",
+        "name": "target"
+      }
+    ],
+    "include-command-output-in-response": true,
+    "response-headers": [
+      {
+        "name": "Content-Type",
+        "value": "application/json; charset=utf-8"
+      }
+    ],
+    "http-methods": ["POST"]
+  }
+]
