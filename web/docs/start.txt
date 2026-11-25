@@ -45,3 +45,7 @@
 
     ```
 任务列表：1. 生成前端html文件。 2. 生成hooks.json文件
+
+
+追加任务：
+生成get_webhook.sh 脚本文件，shell脚本主要作用为：从github release 页面地址https://github.com/adnanh/webhook/releases，下载符合系统与cpu架构的tgz, 最后解压出webhook二进制文件，并添加执行权限
