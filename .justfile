@@ -1,4 +1,4 @@
 setup:
-    ./test/setup.sh
+    ./tests/setup.sh
 jtapi:
-    ./test/test_api.sh
+    ./tests/test_api.sh
