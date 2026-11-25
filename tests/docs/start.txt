@@ -1,0 +1,7 @@
+Web应用，前端单页面html文件，后端webhook二进制文件通过hooks.json提供api服务.再为其添加测试内容。
+重点：测试运行环境固定为githup codespace.所有的测试案例都运行在githup codespace中。在考虑测试方案前提条件为测试环境已固定为githup codespace。
+
+api测试：
+    出方案，出测试结果。
+web页面测试：
+    方案要求：测试环境已固定为githup codespace。在终端执行，把页面保存为图片。
