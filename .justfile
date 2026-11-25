@@ -1,5 +1,4 @@
 setup:
     ./test/setup.sh
-
-just tapi:
+jtapi:
     ./test/test_api.sh
