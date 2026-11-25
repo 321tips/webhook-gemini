@@ -3,9 +3,9 @@ set -eu
 
 action="${1:-}"
 
-downloads_dir="${DOWNLOADS_DIR:-/data/downloads}"
-path_a="${TARGET_A_DIR:-/data/path-a}"
-path_b="${TARGET_B_DIR:-/data/path-b}"
+downloads_dir="${DOWNLOADS_DIR:-./data/downloads}"
+path_a="${TARGET_A_DIR:-./data/path-a}"
+path_b="${TARGET_B_DIR:-./data/path-b}"
 
 json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\n'
