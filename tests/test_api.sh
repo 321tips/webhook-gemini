@@ -31,11 +31,9 @@ code=$(curl -s -o "$OUT_DIR/downloads_list.json" -w "%{http_code}" -X GET "${BAS
 check_status "GET /hooks/api/Downloads/" "$code" "200"
 cat "$OUT_DIR/downloads_list.json"; echo ""
 
-echo "=== 3. 测试 /hooks/api/Downlods/ (GET 拼写兼容别名) ==="
-code=$(curl -s -o "$OUT_DIR/downlods_list.json" -w "%{http_code}" -X GET "${BASE_URL}/hooks/api/Downlods/")
-check_status "GET /hooks/api/Downlods/" "$code" "200"
 
-echo "=== 4. 测试 /hooks/api/move (POST JSON payload) ==="
+
+echo "=== 3. 测试 /hooks/api/move (POST JSON payload) ==="
 code=$(curl -s -o "$OUT_DIR/move_resp.json" -w "%{http_code}" \
   -X POST "${BASE_URL}/hooks/api/move" \
   -H "Content-Type: application/json" \
@@ -43,7 +41,7 @@ code=$(curl -s -o "$OUT_DIR/move_resp.json" -w "%{http_code}" \
 check_status "POST /hooks/api/move" "$code" "200"
 cat "$OUT_DIR/move_resp.json"; echo ""
 
-echo "=== 5. 负向测试：错误 HTTP 方法与不存在的路径 ==="
+echo "=== 4. 负向测试：错误 HTTP 方法与不存在的路径 ==="
 bad_method=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${BASE_URL}/hooks/api/Downloads/")
 check_status "POST on GET-only /hooks/api/Downloads/" "$bad_method" "405"
 
