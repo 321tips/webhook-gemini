@@ -110,7 +110,7 @@
   <script>
     const API_LIST = '/hooks/api/Downloads/';
     const API_MOVE = '/hooks/api/move';
-    const TARGETS = { A: '/data/path-a', B: '/data/path-b' };
+    const TARGETS = { A: './data/path-a', B: './data/path-b' };
 
     const listEl = document.getElementById('list');
     const statusEl = document.getElementById('status');
@@ -138,6 +138,32 @@
         i++;
       }
       return (i === 0 ? value : value.toFixed(1)) + ' ' + units[i];
+    }
+
+    function parsePayload(raw) {
+      if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        return trimmed ? JSON.parse(trimmed) : {};
+      }
+      return raw || {};
+    }
+
+    function extractList(data) {
+      let target = data;
+      if (target && typeof target === 'object' && !Array.isArray(target) && 'data' in target) {
+        target = typeof target.data === 'string' ? JSON.parse(target.data) : target.data;
+      }
+      if (Array.isArray(target)) return target;
+      if (target && typeof target === 'object' && Array.isArray(target.files)) return target.files;
+      return [];
+    }
+
+    function checkEnvelope(data) {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+      const code = data.statusCode !== undefined && data.statusCode !== null ? Number(data.statusCode) : 200;
+      if (code !== 200 || data.ok === false) {
+        throw new Error(data.error || ('状态码 ' + code));
+      }
     }
 
     function render(files) {
@@ -185,8 +211,10 @@
       try {
         const res = await fetch(API_LIST, { headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        const files = Array.isArray(data) ? data : (Array.isArray(data.files) ? data.files : []);
+        const text = await res.text();
+        const data = parsePayload(text);
+        checkEnvelope(data);
+        const files = extractList(data);
         render(files);
         setStatus(files.length ? '' : '暂无文件', false);
       } catch (err) {
@@ -226,14 +254,16 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
+        const text = await res.text();
         if (!res.ok) {
-          const text = await res.text();
           throw new Error('HTTP ' + res.status + (text ? ' · ' + text.slice(0, 200) : ''));
         }
+        const data = parsePayload(text);
+        checkEnvelope(data);
         closeModal();
         await loadFiles();
       } catch (err) {
-        alert('移动失败：Err: ' + err.message);
+        alert('移动失败：' + err.message);
       } finally {
         confirmBtn.disabled = false;
       }
