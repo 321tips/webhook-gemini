@@ -1,6 +1,6 @@
 # 1. 启动本地静态服务托管 web/index.html
-python3 -m http.server 8080 -d web > /tmp/web.log 2>&1 &
-sleep 1
+# python3 -m http.server 8080 -d web > /tmp/web.log 2>&1 &
+# sleep 1
 
 
 # 2. 安装 playwright 及 chromium（若环境尚未安装）
