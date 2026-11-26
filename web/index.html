@@ -233,7 +233,7 @@
         closeModal();
         await loadFiles();
       } catch (err) {
-        alert('移动失败：' + err.message);
+        alert('移动失败：Err: ' + err.message);
       } finally {
         confirmBtn.disabled = false;
       }
