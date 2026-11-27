@@ -119,10 +119,6 @@ move_file() {
     respond_json '{"statusCode":400,"ok":false,"error":"missing source or target"}'
   fi
 
-  case "$src" in
-    ./data/downloads/* | data/downloads/*) ;;
-    *) respond_json '{"statusCode":400,"ok":false,"error":"invalid source path"}' ;;
-  esac
 
   case "$src" in
     *..*) respond_json '{"statusCode":400,"ok":false,"error":"path traversal blocked"}' ;;
