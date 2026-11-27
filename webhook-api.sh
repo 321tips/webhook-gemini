@@ -32,7 +32,7 @@ strip_quotes() {
 
 parse_targets() {
   [ -f "$TARGETS_FILE" ] || return 0
-  tr -d '\r' < "$TARGETS_FILE" | while IFS= read -r line; do
+  tr -d '\r' < "$TARGETS_FILE" | while IFS= read -r line || [ -n "$line" ]; do
     clean_line=$(trim "$line")
     [ -z "$clean_line" ] && continue
     case "$clean_line" in
