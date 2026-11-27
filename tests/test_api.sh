@@ -47,6 +47,11 @@ assert_eq "GET /hooks/api/Downloads/ HTTP 状态码" "$http_code" "200"
 body_code=$(extract_body_code "$OUT_DIR/downloads_list.json")
 assert_eq "GET /hooks/api/Downloads/ body statusCode" "$body_code" "200"
 
+http_code=$(curl -s -o "$OUT_DIR/downloads_list.json" -w "%{http_code}" -X GET "${BASE_URL}/hooks/api/targets")
+assert_eq "GET /hooks/api/targets HTTP 状态码" "$http_code" "200"
+body_code=$(extract_body_code "$OUT_DIR/downloads_targets.json")
+assert_eq "GET/hooks/api/targets body statusCode" "$body_code" "200"
+
 echo "=== 3. 测试 POST /hooks/api/move (首次 200 / 重复 409 / 缺失参数 400 / 不存在文件 404) ==="
 # 3.1 首次正常移动 -> HTTP 200, body statusCode 200
 http_code=$(curl -s -o "$OUT_DIR/move_first.json" -w "%{http_code}" \
