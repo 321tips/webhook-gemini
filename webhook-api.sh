@@ -1,91 +1,177 @@
-#!/bin/sh
+#!/usr/bin/env sh
 set -eu
 
-action="${1:-}"
+DOWNLOADS_DIR="${DOWNLOADS_DIR:-./data/downloads}"
+LOCK_DIR="${MOVE_LOCK_DIR:-/tmp/webhook_move_locks}"
+TARGETS_FILE="${TARGETS_FILE:-./list_targets.csv}"
 
-downloads_dir="${DOWNLOADS_DIR:-./data/downloads}"
-path_a="${TARGET_A_DIR:-./data/path-a}"
-path_b="${TARGET_B_DIR:-./data/path-b}"
-lock_dir="${MOVE_LOCK_DIR:-/tmp/webhook_move_locks}"
-
-json_escape() {
-  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\n'
-}
-
-# 统一以 exit 0 输出（配合 webhook 返回 HTTP 200），将业务状态码写入 JSON body
 respond_json() {
-  code="$1"
-  payload="$2"
-  printf '{"statusCode":%s,%s}\n' "$code" "$payload"
+  printf '%s\n' "$1"
   exit 0
 }
 
-fail_with_code() {
-  code="$1"
-  msg="$2"
-  respond_json "$code" "\"ok\":false,\"error\":\"$(json_escape "$msg")\""
+json_escape() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' -e ':a;N;$!ba;s/\n/\\n/g' -e 's/\r/\\r/g' -e 's/\t/\\t/g'
 }
 
-list_files() {
-  [ -d "$downloads_dir" ] || fail_with_code 404 "downloads directory not found: $downloads_dir"
-  items=''
-  sep=''
-  while IFS= read -r f; do
-    name=$(basename "$f")
-    size=$(wc -c < "$f" | tr -d '[:space:]')
-    ctime=$(stat -c %W "$f" 2>/dev/null || echo 0)
-    case "$ctime" in
-      ''|0|'?') ctime=$(stat -c %Y "$f" 2>/dev/null || echo 0) ;;
+trim() {
+  printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+strip_quotes() {
+  val=$(trim "$1")
+  case "$val" in
+    \"*\")
+      val="${val#\"}"
+      val="${val%\"}"
+      val=$(printf '%s' "$val" | sed -e 's/""/"/g')
+      ;;
+  esac
+  printf '%s' "$val"
+}
+
+parse_targets() {
+  [ -f "$TARGETS_FILE" ] || return 0
+  tr -d '\r' < "$TARGETS_FILE" | while IFS= read -r line; do
+    clean_line=$(trim "$line")
+    [ -z "$clean_line" ] && continue
+    case "$clean_line" in
+      \#*) continue ;;
     esac
-    created=$(date -u -d "@$ctime" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)
-    entry=$(printf '%s{"filename":"%s","size":%s,"createdAt":"%s","path":"%s"}' \
-      "$sep" "$(json_escape "$name")" "$size" "$created" "$(json_escape "$f")")
-    items="${items}${entry}"
-    sep=','
+    case "$clean_line" in
+      *,*) ;;
+      *) continue ;;
+    esac
+    raw_name="${clean_line%%,*}"
+    raw_target="${clean_line#*,}"
+    t_name=$(strip_quotes "$raw_name")
+    t_path=$(strip_quotes "$raw_target")
+    if [ "$t_name" = "name" ] && [ "$t_path" = "target" ]; then
+      continue
+    fi
+    [ -n "$t_name" ] && [ -n "$t_path" ] && printf '%s\t%s\n' "$t_name" "$t_path"
+  done
+}
+
+is_valid_target() {
+  candidate="$1"
+  parse_targets | while IFS='	' read -r _name t_path; do
+    if [ "$t_path" = "$candidate" ]; then
+      printf '1\n'
+      return 0
+    fi
+  done
+}
+
+targets_json() {
+  out=""
+  first=1
+  while IFS='	' read -r t_name t_path; do
+    [ -z "$t_name" ] && continue
+    esc_name=$(json_escape "$t_name")
+    esc_path=$(json_escape "$t_path")
+    item="{\"name\":\"${esc_name}\",\"target\":\"${esc_path}\"}"
+    if [ "$first" -eq 1 ]; then
+      out="$item"
+      first=0
+    else
+      out="${out},${item}"
+    fi
   done <<EOF
-$(find "$downloads_dir" -mindepth 1 -maxdepth 1 -type f | sort)
+$(parse_targets)
 EOF
-  respond_json 200 "\"ok\":true,\"data\":[${items}]"
+  printf '[%s]' "$out"
+}
+
+lock_key_for() {
+  printf '%s' "$1" | cksum | awk '{print $1 "_" $2}'
+}
+
+list_downloads() {
+  mkdir -p "$DOWNLOADS_DIR"
+  out=""
+  first=1
+  for entry in "$DOWNLOADS_DIR"/*; do
+    [ -e "$entry" ] || continue
+    [ -f "$entry" ] || continue
+    fname=$(basename "$entry")
+    size=$(wc -c < "$entry" | tr -d '[:space:]')
+    ts=$(date -u -r "$entry" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+    esc_name=$(json_escape "$fname")
+    esc_path=$(json_escape "$entry")
+    esc_ts=$(json_escape "$ts")
+    item="{\"filename\":\"${esc_name}\",\"size\":${size},\"createdAt\":\"${esc_ts}\",\"path\":\"${esc_path}\"}"
+    if [ "$first" -eq 1 ]; then
+      out="$item"
+      first=0
+    else
+      out="${out},${item}"
+    fi
+  done
+  respond_json "{\"statusCode\":200,\"ok\":true,\"data\":[${out}]}"
 }
 
 move_file() {
-  src="${2:-}"
-  target_dir="${3:-}"
-  [ -n "$src" ] || fail_with_code 400 "source is required"
-  [ -n "$target_dir" ] || fail_with_code 400 "target is required"
+  src="${1:-}"
+  dst_dir="${2:-}"
 
-  case "$src" in
-    "$downloads_dir"/*) ;;
-    *) fail_with_code 400 "source must be inside $downloads_dir" ;;
-  esac
-
-  case "$target_dir" in
-    "$path_a"|"$path_b") ;;
-    *) fail_with_code 400 "target must be path A or path B" ;;
-  esac
-
-  [ -f "$src" ] || fail_with_code 404 "source file not found: $src"
-
-  mkdir -p "$lock_dir" || fail_with_code 500 "cannot create lock directory"
-  key=$(printf '%s->%s' "$src" "$target_dir" | cksum | awk '{print $1"_"$2}')
-  lock_file="$lock_dir/${key}.lock"
-  if [ -e "$lock_file" ]; then
-    fail_with_code 409 "duplicate move request blocked"
+  if [ -z "$src" ] || [ -z "$dst_dir" ]; then
+    respond_json '{"statusCode":400,"ok":false,"error":"missing source or target"}'
   fi
 
-  mkdir -p "$target_dir" || fail_with_code 500 "cannot create target directory"
-  base=$(basename "$src")
-  target="$target_dir/$base"
-  [ ! -e "$target" ] || fail_with_code 409 "target file already exists: $target"
+  case "$src" in
+    ./data/downloads/* | data/downloads/*) ;;
+    *) respond_json '{"statusCode":400,"ok":false,"error":"invalid source path"}' ;;
+  esac
 
-  mv -- "$src" "$target" || fail_with_code 500 "move failed"
+  case "$src" in
+    *..*) respond_json '{"statusCode":400,"ok":false,"error":"path traversal blocked"}' ;;
+  esac
+
+  if [ -z "$(is_valid_target "$dst_dir")" ]; then
+    respond_json '{"statusCode":400,"ok":false,"error":"invalid target directory"}'
+  fi
+
+  if [ ! -f "$src" ]; then
+    respond_json '{"statusCode":404,"ok":false,"error":"source file not found"}'
+  fi
+
+  mkdir -p "$dst_dir" "$LOCK_DIR"
+  base_name=$(basename "$src")
+  dst_file="${dst_dir}/${base_name}"
+  lock_file="${LOCK_DIR}/$(lock_key_for "${src}->${dst_dir}").lock"
+
+  if [ -e "$lock_file" ]; then
+    respond_json '{"statusCode":409,"ok":false,"error":"duplicate move request blocked"}'
+  fi
+
+  if [ -e "$dst_file" ]; then
+    respond_json '{"statusCode":409,"ok":false,"error":"target file already exists"}'
+  fi
+
   : > "$lock_file"
-
-  respond_json 200 "\"ok\":true,\"source\":\"$(json_escape "$src")\",\"target\":\"$(json_escape "$target")\""
+  if mv "$src" "$dst_file"; then
+    esc_src=$(json_escape "$src")
+    esc_dst=$(json_escape "$dst_dir")
+    respond_json "{\"statusCode\":200,\"ok\":true,\"source\":\"${esc_src}\",\"target\":\"${esc_dst}\"}"
+  else
+    rm -f "$lock_file"
+    respond_json '{"statusCode":500,"ok":false,"error":"failed to move file"}'
+  fi
 }
 
-case "$action" in
-  list) list_files ;;
-  move) move_file "$@" ;;
-  *) fail_with_code 400 "unknown action" ;;
+cmd="${1:-}"
+case "$cmd" in
+  list)
+    list_downloads
+    ;;
+  targets)
+    respond_json "{\"statusCode\":200,\"ok\":true,\"data\":$(targets_json)}"
+    ;;
+  move)
+    move_file "${2:-}" "${3:-}"
+    ;;
+  *)
+    respond_json '{"statusCode":400,"ok":false,"error":"unknown command"}'
+    ;;
 esac

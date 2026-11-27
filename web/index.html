@@ -63,6 +63,7 @@
     }
     .dialog h2 { margin: 0 0 8px; font-size: 18px; }
     .dialog p { margin: 0 0 16px; color: #667085; overflow-wrap: anywhere; }
+    .targets { display: grid; gap: 10px; margin-bottom: 16px; }
     .choice {
       display: flex;
       align-items: center;
@@ -70,7 +71,6 @@
       padding: 10px 12px;
       border: 1px solid #e4e7ec;
       border-radius: 10px;
-      margin-bottom: 10px;
     }
     .choice span { font-size: 12px; color: #667085; overflow-wrap: anywhere; }
     .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
@@ -92,14 +92,7 @@
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <h2 id="modal-title">移动文件</h2>
       <p id="modal-file"></p>
-      <label class="choice">
-        <input type="radio" name="target" value="A" checked>
-        <span>路径 A：<b data-target-path="A"></b></span>
-      </label>
-      <label class="choice">
-        <input type="radio" name="target" value="B">
-        <span>路径 B：<b data-target-path="B"></b></span>
-      </label>
+      <div id="targets" class="targets"></div>
       <div class="actions">
         <button id="cancel" type="button">取消</button>
         <button id="confirm" class="primary" type="button">确认移动</button>
@@ -109,19 +102,17 @@
 
   <script>
     const API_LIST = '/hooks/api/Downloads/';
+    const API_TARGETS = '/hooks/api/targets';
     const API_MOVE = '/hooks/api/move';
-    const TARGETS = { A: './data/path-a', B: './data/path-b' };
 
     const listEl = document.getElementById('list');
     const statusEl = document.getElementById('status');
     const modal = document.getElementById('modal');
     const modalFile = document.getElementById('modal-file');
+    const targetsEl = document.getElementById('targets');
     const confirmBtn = document.getElementById('confirm');
     let currentFile = null;
-
-    document.querySelectorAll('[data-target-path]').forEach(function (el) {
-      el.textContent = TARGETS[el.dataset.targetPath];
-    });
+    let targetOptions = [];
 
     function setStatus(text, isError) {
       statusEl.textContent = text;
@@ -148,13 +139,15 @@
       return raw || {};
     }
 
-    function extractList(data) {
+    function extractArray(data, subKey) {
       let target = data;
       if (target && typeof target === 'object' && !Array.isArray(target) && 'data' in target) {
         target = typeof target.data === 'string' ? JSON.parse(target.data) : target.data;
       }
       if (Array.isArray(target)) return target;
-      if (target && typeof target === 'object' && Array.isArray(target.files)) return target.files;
+      if (target && typeof target === 'object' && subKey && Array.isArray(target[subKey])) {
+        return target[subKey];
+      }
       return [];
     }
 
@@ -164,6 +157,51 @@
       if (code !== 200 || data.ok === false) {
         throw new Error(data.error || ('状态码 ' + code));
       }
+    }
+
+    function renderTargets(items) {
+      targetsEl.replaceChildren();
+      targetOptions = items
+        .map(function (item) {
+          if (typeof item === 'string') {
+            return { name: item, target: item };
+          }
+          return {
+            name: item.name || item.label || item.target || '',
+            target: item.target || item.path || ''
+          };
+        })
+        .filter(function (item) {
+          return item.target;
+        });
+
+      targetOptions.forEach(function (opt, idx) {
+        const label = document.createElement('label');
+        label.className = 'choice';
+
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'target';
+        radio.value = opt.target;
+        if (idx === 0) radio.checked = true;
+
+        const span = document.createElement('span');
+        const b = document.createElement('b');
+        b.textContent = opt.target;
+        span.append(document.createTextNode((opt.name ? opt.name + '：' : '')), b);
+
+        label.append(radio, span);
+        targetsEl.append(label);
+      });
+    }
+
+    async function loadTargets() {
+      const res = await fetch(API_TARGETS, { headers: { Accept: 'application/json' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      const data = parsePayload(text);
+      checkEnvelope(data);
+      renderTargets(extractArray(data, 'targets'));
     }
 
     function render(files) {
@@ -209,12 +247,13 @@
     async function loadFiles() {
       setStatus('加载中…', false);
       try {
+        await loadTargets();
         const res = await fetch(API_LIST, { headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const text = await res.text();
         const data = parsePayload(text);
         checkEnvelope(data);
-        const files = extractList(data);
+        const files = extractArray(data, 'files');
         render(files);
         setStatus(files.length ? '' : '暂无文件', false);
       } catch (err) {
@@ -223,8 +262,14 @@
     }
 
     function openModal(file, name) {
+      if (!targetOptions.length) {
+        alert('未获取到可用目标路径');
+        return;
+      }
       currentFile = file;
       modalFile.textContent = name + '  (' + (file.path || '') + ')';
+      const firstRadio = modal.querySelector('input[name="target"]');
+      if (firstRadio) firstRadio.checked = true;
       modal.hidden = false;
       confirmBtn.focus();
     }
@@ -245,8 +290,12 @@
 
     confirmBtn.addEventListener('click', async function () {
       if (!currentFile) return;
-      const choice = modal.querySelector('input[name="target"]:checked').value;
-      const payload = { source: currentFile.path, target: TARGETS[choice] };
+      const checked = modal.querySelector('input[name="target"]:checked');
+      if (!checked || !checked.value) {
+        alert('请选择目标路径');
+        return;
+      }
+      const payload = { source: currentFile.path, target: checked.value };
       confirmBtn.disabled = true;
       try {
         const res = await fetch(API_MOVE, {

@@ -42,6 +42,29 @@
     "http-methods": ["GET"]
   },
   {
+    "id": "api/targets",
+    "execute-command": "/bin/sh",
+    "command-working-directory": ".",
+    "pass-arguments-to-command": [
+      {
+        "source": "string",
+        "name": "webhook-api.sh"
+      },
+      {
+        "source": "string",
+        "name": "targets"
+      }
+    ],
+    "include-command-output-in-response": true,
+    "response-headers": [
+      {
+        "name": "Content-Type",
+        "value": "application/json; charset=utf-8"
+      }
+    ],
+    "http-methods": ["GET"]
+  },
+  {
     "id": "api/move",
     "execute-command": "/bin/sh",
     "command-working-directory": ".",
