@@ -7,7 +7,7 @@ downloads_dir="${DOWNLOADS_DIR:-./data/downloads}"
 path_a="${TARGET_A_DIR:-./data/path-a}"
 path_b="${TARGET_B_DIR:-./data/path-b}"
 echo $downloads_dir
-rm -fr $downloads_dir
+rm -fr ./data
 if [ ! -d $downloads_dir ]; then
     mkdir -p $downloads_dir
     echo "测试文件A.m4a" > $downloads_dir/测试文件A.m4a

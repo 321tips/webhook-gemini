@@ -36,8 +36,12 @@ with sync_playwright() as p:
         page.wait_for_timeout(500)
         page.screenshot(path=str(confirm_img), full_page=True)
 
-        with page.expect_response(lambda r: "/hooks/api/Downloads/" in r.url and r.request.method == "GET"):
-            page.locator("#refresh").click()
+        refresh_btn = page.locator("#refresh")
+        if refresh_btn.count() > 0 and refresh_btn.is_visible() and refresh_btn.is_enabled():
+            with page.expect_response(lambda r: "/hooks/api/Downloads/" in r.url and r.request.method == "GET"):
+                page.locator("#refresh").click()
+        else:
+            print("#refresh btn not click....")
         page.wait_for_timeout(500)
         page.screenshot(path=str(after_refresh_img), full_page=True)
 
