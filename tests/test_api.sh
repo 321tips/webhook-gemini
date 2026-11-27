@@ -47,7 +47,7 @@ assert_eq "GET /hooks/api/Downloads/ HTTP 状态码" "$http_code" "200"
 body_code=$(extract_body_code "$OUT_DIR/downloads_list.json")
 assert_eq "GET /hooks/api/Downloads/ body statusCode" "$body_code" "200"
 
-http_code=$(curl -s -o "$OUT_DIR/downloads_list.json" -w "%{http_code}" -X GET "${BASE_URL}/hooks/api/targets")
+http_code=$(curl -s -o "$OUT_DIR/downloads_targets.json" -w "%{http_code}" -X GET "${BASE_URL}/hooks/api/targets")
 assert_eq "GET /hooks/api/targets HTTP 状态码" "$http_code" "200"
 body_code=$(extract_body_code "$OUT_DIR/downloads_targets.json")
 assert_eq "GET/hooks/api/targets body statusCode" "$body_code" "200"
