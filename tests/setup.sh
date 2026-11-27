@@ -24,6 +24,7 @@ fi
 
 npm install -g rust-just
 export TARGETS_FILE=./tests/test_list_targets.csv
+pkill -f ./webhook
 ./webhook -hooks hooks.json -port 9000 -verbose > /tmp/webhook.log 2>&1 &
 
 sleep 1
